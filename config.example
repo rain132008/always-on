@@ -1,0 +1,16 @@
+# 本机运行。使用 PowerShell 设置相应的环境变量。
+# ALWAYS_ON_DATA=D:/ai/aiProj/alwaysOn/runtime-data
+# ALWAYS_ON_SDD_ROOT=D:/ai/aiProj/alwaysOn/runtime-data/mock-sdd
+# YAML 工作流目录，默认使用项目 workflows/。
+# ALWAYS_ON_WORKFLOWS_DIR=
+# 本机 SDD CLI 切换。start-local.ps1 默认加载真实 Claude，MR 和文档维护仍用 Mock。
+# ALWAYS_ON_SDD_RUNNER=claude
+# ALWAYS_ON_CLAUDE_MODEL=moonshotai/Kimi-K2.7-Code
+# Claude 专用验收入口。使用实际网关的模型和密钥。
+# ALWAYS_ON_CLAUDE_TEST_MODEL=
+# ANTHROPIC_BASE_URL=
+# ANTHROPIC_API_KEY=
+# OpenAI 在线测试需按需启用，由当前终端注入密钥和模型。
+# ALWAYS_ON_OPENAI_LIVE=1
+# ALWAYS_ON_OPENAI_TEST_MODEL=
+# OPENAI_API_KEY=

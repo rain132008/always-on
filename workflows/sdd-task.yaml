@@ -1,0 +1,12 @@
+id: sdd-task
+name: SDD 通用任务
+trigger:
+  type: manual
+condition: always
+agent:
+  profile: sdd-default
+  skill:
+    id: sdd-task
+    version: v1
+session: per_task
+result: {}

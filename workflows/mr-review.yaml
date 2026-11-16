@@ -1,0 +1,17 @@
+id: mr-review
+name: MR 代码评审
+trigger:
+  type: poll
+  seconds: 2
+source:
+  connector: mock-git
+  operation: merge_requests
+condition: new_item
+agent:
+  profile: review
+  skill:
+    id: mock-review
+    version: v1
+session: per_subject
+result:
+  completed: [publish_review]

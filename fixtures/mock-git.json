@@ -1,0 +1,67 @@
+{
+  "mr_opened": {
+    "mrs": [
+      {
+        "seq": 1,
+        "event": "opened",
+        "mr": {
+          "ref": {"provider": "mock", "project_id": "sample-api", "iid": 12},
+          "title": "统一问候语显示",
+          "head_sha": "a100000000000000000000000000000000000001",
+          "status": "open"
+        },
+        "diff": "diff --git a/greeting.py b/greeting.py\n--- a/greeting.py\n+++ b/greeting.py\n@@ -1,2 +1,2 @@\n def greeting(name):\n-    return name\n+    return f'你好，{name}'\n"
+      }
+    ]
+  },
+  "mr_updated": {
+    "mrs": [
+      {
+        "seq": 2,
+        "event": "updated",
+        "mr": {
+          "ref": {"provider": "mock", "project_id": "sample-api", "iid": 12},
+          "title": "统一问候语显示",
+          "head_sha": "a200000000000000000000000000000000000002",
+          "status": "open"
+        },
+        "diff": "diff --git a/greeting.py b/greeting.py\n--- a/greeting.py\n+++ b/greeting.py\n@@ -1,2 +1,2 @@\n def greeting(name):\n-    return name\n+    return f'你好，{name or \"访客\"}'\n"
+      }
+    ]
+  },
+  "merged_batch": {
+    "commits": [
+      {
+        "seq": 1,
+        "commit": {
+          "repository": {"project_id": "sample-api", "branch": "main"},
+          "sha": "b100000000000000000000000000000000000001",
+          "summary": "增加访客称呼的默认显示",
+          "diff": "diff --git a/greeting.py b/greeting.py\n+DEFAULT_DISPLAY_NAME = '访客'\n"
+        }
+      },
+      {
+        "seq": 2,
+        "commit": {
+          "repository": {"project_id": "sample-web", "branch": "main"},
+          "sha": "b200000000000000000000000000000000000002",
+          "summary": "统一空搜索结果提示文案",
+          "diff": "diff --git a/src/empty.ts b/src/empty.ts\n+export const emptyText = '没有匹配的结果'\n"
+        }
+      }
+    ]
+  },
+  "merged_increment": {
+    "commits": [
+      {
+        "seq": 3,
+        "commit": {
+          "repository": {"project_id": "sample-api", "branch": "main"},
+          "sha": "b300000000000000000000000000000000000003",
+          "summary": "为访客显示补充语言选项",
+          "diff": "diff --git a/greeting.py b/greeting.py\n+SUPPORTED_LANGUAGES = ('zh', 'en')\n"
+        }
+      }
+    ]
+  }
+}

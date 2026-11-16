@@ -1,0 +1,22 @@
+id: doc-maintenance
+name: 夜间文档维护
+trigger:
+  type: cron
+  expression: "0 2 * * *"
+  timezone: Asia/Shanghai
+source:
+  connector: mock-git
+  operation: merged_commits
+  options:
+    repositories:
+      - {project_id: sample-api, branch: main}
+      - {project_id: sample-web, branch: main}
+condition: new_item
+agent:
+  profile: document
+  skill:
+    id: mock-document-maintenance
+    version: v1
+session: per_task
+result:
+  completed: [save_document_suggestion]

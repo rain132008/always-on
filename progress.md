@@ -1,0 +1,59 @@
+# 开发记录与交接
+
+## 2026-11-16 · 本机 SDD 使用真实 Claude CLI
+
+- `start-local.ps1` 在原运行目录启动混合模式。新 SDD 使用 Claude Code 2.1.109，既有会话和 MR、文档维护保留其原 Runner。管理台显示当前工作流和每轮任务的执行方式。
+- 本机 Edge 通过硅基流动 Kimi 合成任务验证了创建、人工澄清、服务重启和原 Session 恢复。隔离实例验证 Mock MR 评论及 Mock 文档建议。Vue 构建通过，24 项自动测试通过，默认跳过 OpenAI 在线项。见 [验收记录](mvp-validation-report.md#本机-sdd-真实-claude-复验)。
+
+## 2026-11-16 · Agent 管理与工作流绑定
+
+- 默认三个工作流分别绑定通用任务、代码评审及文档维护 Agent。管理台支持新增、编辑及更换绑定，并在任务详情及工作流运行历史显示执行 Agent。升级本机运行库后原有任务保留。
+- Edge 验证了新增、编辑、切换 MR 绑定、重启后保留、Mock 评论及运行历史。Claude Code 2.1.109 用合成任务验证了所选 Agent 的提示词。Vue 构建通过，23 项自动测试通过，OpenAI 在线项按默认配置跳过。见 [验收结果](mvp-validation-report.md#agent-管理与工作流绑定复验)。
+
+## 2026-11-16 · P3.6 Web UI/UX
+
+- 桌面工作区上限调整为 1520px。任务概览、队列优先级和筛选来自实际任务列表，详情按业务目标、最新结论、下一步和时间线组织。可按需展开日志、会话和运行环境。
+- 通过 Edge 验证运行中、待人工、失败、已完成和关闭状态，并复验新建、回复、继续、核验重排、启停和动作核对。前端构建通过，自动回归 21 项通过。
+- 改动集中于 Vue 界面与样式，任务和调度继续使用原接口。截图及复验见 [MVP 验收报告](mvp-validation-report.md#p36-web-工作台复验)。
+
+## 2026-11-16 · Agent 自主预约唤醒
+
+- RunResult 支持延期续跑，复用现有 Wakeup、Session 和结果事务。有效延期为 5 秒至 7 天，同一 Run 去重，最多连续自动唤醒 5 次。任务页显示到期时间。
+- Edge 复验真实 Claude 的 20 秒预约、跨重启原会话续跑，以及 Mock 停用、关闭、非法时间和人工澄清路径。21 项自动测试与前端构建通过。
+- 真实 Claude 验收入口每轮注入平台系统提示词，要求记录可交接摘要及有证据的文档维护建议。真实业务文档写入仍待内网适配。证据见 [MVP 验收报告](mvp-validation-report.md#agent-自主预约唤醒复验)。
+
+## 2026-11-16 · P3.5 管理功能收尾
+
+- 新增会话中心、工作流管理和任务关闭操作，复用现有 Session、Run、事件与 Wakeup。工作流启停和扫描失败历史通过 SQLite 保存。
+- Edge 实测真实 Claude Code `2.1.109` 手动继续原 Session、停用跨重启、启用后补扫、显示单仓失败原因，以及运行中关闭后阻断旧结果和后续唤醒。
+- 18 项自动测试和前端构建通过，P3 历史数据库副本迁移检查通过。截图、覆盖范围与遗留问题见 [验收报告](mvp-validation-report.md#p35-管理功能复验)。
+
+## 2026-11-16 · MVP 场景与稳定性验收
+
+- 跑完并发待办、MR 快速更新、多轮澄清、进程与 Outbox 故障、游标与配置回归。真实 Claude Code `2.1.109` 在执行中断后从浏览器继续原 Session。
+- 修复 P1 缺陷，防止同主题旧版本报告落库和中断后重新执行过期 Wakeup。两种浏览器路径均复测通过。已记录浏览器功能缺口和其余 P2 问题。
+- 具备进入公司内网隔离测试环境联调的条件。场景结果、截图及内网仍需验证的风险见 [验收报告](mvp-validation-report.md)。
+
+## 2026-11-16 · P2、P3 工作流底座
+
+- 新增启动时加载的 YAML 工作流、Connector 注册机制、定时和轮询检查点、持久化游标与工作流产出。扫描批次的事件、任务、Wakeup 和游标共用事务。
+- Mock MR 已用两个 SHA 跑通同会话评审与评论回写。自动测试另验证了已落地评论的崩溃恢复核对，以及旧 head 阻写。Review Skill 配置绑定 ID 和版本，输出契约不设公司评分。
+- 单独用 Claude Code `2.1.109` 和硅基流动 Kimi 评审合成 Diff，返回的 SHA 和发现列表通过 `ReviewOutput` 校验。内网 Review Skill 接入仍待验证。
+- Mock 文档维护已用多仓提交、增量游标、澄清待办和独立 Session 跑通。Edge 实测终止并重启服务后回复原待办，任务页保存与原提交匹配的更新建议。截图在本地 `runtime-data/workflow-qa-2c037a1c/`。
+- 14 项自动测试通过，默认跳过 OpenAI 在线测试。验证了定时到点、游标事务回滚、重复投递、只添加 YAML 复用已有数据源和 P1 旧数据库副本迁移。Vue 构建、UTF-8 与乱码检查均通过。
+- 真实业务接入的输入、配置和验收方法已更新到 [内网交接](docs/intranet-handoff.md)，Connector 和 Skill 数据见 [契约](docs/connector-contracts.md)。
+
+## 2026-11-16 · 固定版 Claude 与真实凭据实测
+
+- 在项目运行目录独立安装 Claude Code `2.1.109`。新增合成任务验收入口，校验精确版本并使用独立 SQLite、工作区和 CLI 会话存储。默认运行仍为 Mock。
+- 硅基流动的旧模型 `moonshotai/Kimi-K2-Instruct` 返回 `403 Model disabled`。测试进程改用模型列表中的 `moonshotai/Kimi-K2.7-Code`，适配该网关将推理与最终 JSON 合并到同一结果字段的行为，保留服务侧结果校验。
+- Edge 实测真实 Claude CLI 发起待办，服务重启后在网页回复。CLI 的两轮会话记录显示使用同一个 Session ID 和所选 Kimi 模型，第二轮总结包含合成人工回复中的编号。截图与运行证据位于本地 `runtime-data/claude-live-a2d102a7/`。
+- 用已有 OpenAI Key 单独调用官方 Responses API，`gpt-4.1-mini` 的结构化输出通过 `RunResult` 校验。默认回归为 10 项通过，OpenAI 在线测试按需启用时单独通过。真实内网业务验收仍见 [内网交接](docs/intranet-handoff.md)。
+
+## 2026-11-16 · 外部首个里程碑
+
+- 交付单机运行底座与 Vue 管理台。Mock Agent 通过独立子进程启动。任务、事件、Wakeup、Session、Run 生命周期、人工待办和 Outbox 走真实实现。
+- Windows 上用 Edge 从构建后的页面新建任务，确认待办和 Session ID，终止 Uvicorn 进程后重新启动，再从页面回复。同一个 Session ID 进入第二轮并完成。查看运行日志和 Mock 通知回执，390 像素宽页面无横向溢出。验收截图保存在本地 `runtime-data/browser-qa-65cfcb3c/`。
+- 自动测试覆盖旧 Run 存活或状态未知时拦截恢复、手工停止和重跑、拒绝迟到结果、工作区缺失和替换，以及 Outbox 的失败、超时、远端已成功但本地漏记和人工核对。运行方式见 [运行手册](docs/operations.md)。
+- 加入可选的 OpenAI 结构化输出测试，真实请求验证见上方后续记录。
+- 用户确认内网 Claude Code 兼容基线为 `2.1.109`。当前里程碑使用 Mock，真实 CLI、SDD、Git 和通知接入仍待 [内网交接](docs/intranet-handoff.md) 验收。后续外部工作从 MR Mock 链路开始。
