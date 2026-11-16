@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { date, eventLabels, label, resumeRestriction, timestamp, workflowLabels, type Run, type Task } from './api'
+import ExpandableText from './ExpandableText.vue'
 import RunDiagnostics from './RunDiagnostics.vue'
 import RunText from './RunText.vue'
+import TaskComposer from './TaskComposer.vue'
 
 const props = defineProps<{ task: Task; busy: boolean; online: boolean; feedback: string; operationError: string }>()
 const emit = defineEmits<{
@@ -16,7 +18,6 @@ const emit = defineEmits<{
 }>()
 
 const draft = ref('')
-const composerInput = ref<HTMLTextAreaElement | null>(null)
 const request = computed(() => props.task.status === 'waiting_human'
   ? props.task.requests.find(item => item.answer === null) : undefined)
 const latestRun = computed(() => props.task.runs.at(-1))
@@ -87,8 +88,7 @@ function jump(id: string) {
 }
 
 function focusComposer() {
-  composerInput.value?.scrollIntoView({ block: 'center' })
-  composerInput.value?.focus({ preventScroll: true })
+  document.getElementById('task-composer-input')?.focus()
 }
 
 function send() {
@@ -99,6 +99,7 @@ function send() {
 }
 
 watch(() => props.feedback, feedback => { if (feedback) draft.value = '' })
+watch(() => request.value?.id, id => { if (id) draft.value = '' })
 </script>
 
 <template>
@@ -115,15 +116,26 @@ watch(() => props.feedback, feedback => { if (feedback) draft.value = '' })
           <span class="chip" :data-status="task.status" role="status"><i class="status-dot"></i>{{ label(task.status) }}</span>
           <span>最近活跃 <time :datetime="timestamp(task.updated_at)">{{ date(task.updated_at) }}</time></span>
         </div>
-        <p v-if="task.next_wakeup && task.status === 'waiting_timer'" class="mobile-wakeup">
-          {{ task.workflow_enabled ? '下次自动唤醒' : '已暂停的唤醒' }} <time :datetime="timestamp(task.next_wakeup.due_at)">{{ date(task.next_wakeup.due_at) }}</time>
-        </p>
       </div>
       <div class="space-actions">
         <button v-if="composer" class="primary" @click="focusComposer">{{ request ? '回复待办' : '补充指令' }}</button>
         <button v-if="task.status !== 'closed'" class="quiet-button" :disabled="busy || !online" @click="emit('close', task)">关闭任务</button>
       </div>
     </header>
+    <section v-if="request" id="current-question" class="current-question" aria-labelledby="current-question-title" tabindex="-1">
+      <div class="question-copy">
+        <h2 id="current-question-title"><i class="status-dot" data-status="waiting_human"></i> 等待你的回复</h2>
+        <ExpandableText v-if="request.question.length > 480" :key="request.id" :text="request.question" :limit="480" />
+        <RunText v-else :text="request.question" />
+        <p v-if="!task.workflow_enabled" class="muted small">启用工作流后可以回复。</p>
+      </div>
+      <TaskComposer v-if="task.workflow_enabled" :key="request.id" v-model="draft" reply :busy="busy" :online="online"
+        :problem="operationError" @send="send" />
+    </section>
+    <div v-else-if="task.next_wakeup && task.status === 'waiting_timer'" class="scheduled-wakeup">
+      <span><i class="status-dot" data-status="waiting_timer"></i> {{ task.workflow_enabled ? '下次自动唤醒' : '已暂停的唤醒' }}</span>
+      <time :datetime="timestamp(task.next_wakeup.due_at)">{{ date(task.next_wakeup.due_at) }}</time>
+    </div>
     <div class="space-layout">
       <section class="workstream" aria-label="对话与执行">
         <header class="stream-header">
@@ -176,6 +188,7 @@ watch(() => props.feedback, feedback => { if (feedback) draft.value = '' })
                 </div>
                 <RunDiagnostics :run="item.run" />
               </template>
+              <button v-else-if="item.current" class="stream-jump" @click="jump('current-question')">查看待回复问题 <span aria-hidden="true">↑</span></button>
               <div v-else-if="item.text" :class="['message', 'message-' + item.kind]">
                 <RunText :text="item.text" />
                 <details v-if="item.sourceDetails" class="disclosure source-details"><summary>完整触发信息</summary><RunText :text="item.sourceDetails" /></details>
@@ -184,28 +197,17 @@ watch(() => props.feedback, feedback => { if (feedback) draft.value = '' })
           </li>
         </ol>
         <div id="activity-end" class="activity-end" tabindex="-1">
-          <form v-if="composer" class="task-composer" @submit.prevent="send">
-            <label class="field">
-              <span>{{ request ? '回复人工问题' : '补充指令' }}</span>
-              <textarea ref="composerInput" v-model="draft" rows="3" maxlength="12000" required :disabled="busy"
-                :placeholder="request ? '输入确认意见或补充背景…' : '告诉 Agent 接下来要做什么…'" />
-            </label>
-            <div class="composer-footer">
-              <span class="muted">使用原会话</span>
-              <button class="primary" :disabled="busy || !online || !draft.trim()">{{ request ? '回复并恢复会话' : '继续原会话' }}</button>
-            </div>
-          </form>
-          <p v-if="composer && operationError" class="error stream-feedback" role="alert">{{ operationError }}</p>
+          <TaskComposer v-if="canResume" v-model="draft" :busy="busy" :online="online" :problem="operationError" @send="send" />
           <p v-if="feedback && task.status === 'ready'" class="stream-feedback" role="status">{{ feedback }}</p>
         </div>
       </section>
       <aside class="space-rail" aria-label="任务状态与上下文">
         <section class="rail-section rail-next" :data-status="task.status">
           <h2>下一步</h2>
-          <time v-if="task.next_wakeup && task.status !== 'closed'" class="rail-due" :datetime="timestamp(task.next_wakeup.due_at)">{{ date(task.next_wakeup.due_at) }}</time>
           <p>{{ waiting || label(task.status) }}</p>
-          <button v-if="request" class="rail-link" @click="jump('question-' + request.id)">定位到澄清问题 <span aria-hidden="true">↗</span></button>
+          <button v-if="request" class="rail-link" @click="jump('current-question')">查看待回复问题 <span aria-hidden="true">↑</span></button>
           <button v-else-if="latestRun && ['running', 'failed', 'recovery_required'].includes(task.status)" class="rail-link" @click="jump('run-' + latestRun.id)">查看本轮执行 <span aria-hidden="true">↗</span></button>
+          <button v-else-if="latestRun?.summary && task.status === 'completed'" class="rail-link" @click="jump('run-' + latestRun.id)">查看最新结果 <span aria-hidden="true">↗</span></button>
           <div v-if="recovery" class="rail-recovery">
             <button v-if="recovery.pid || task.status === 'closed'" :disabled="busy || !online" @click="emit('recover', recovery.id, 'stop')">{{ recovery.pid ? '停止旧进程' : '确认旧运行结束' }}</button>
             <button v-if="task.status !== 'closed' && task.workflow_enabled" class="primary" :disabled="busy || !online" @click="emit('recover', recovery.id, 'retry')">核验并重新排队</button>

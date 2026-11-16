@@ -139,3 +139,11 @@ Vue 构建及 24 项自动测试通过，默认跳过 OpenAI 在线项。本机�
 Vue 生产构建通过，24 项自动化测试通过，OpenAI 在线项默认跳过。
 
 [大厅 1440px](docs/validation/task-space-20261116/01-lobby-1440.png) · [大厅 1920px](docs/validation/task-space-20261116/06-lobby-1920.png) · [运行中](docs/validation/task-space-20261116/03-running-1440.png) · [待人工](docs/validation/task-space-20261116/02-waiting-1440.png) · [已完成](docs/validation/task-space-20261116/04-completed-1440.png) · [待人工窄屏](docs/validation/task-space-20261116/05-waiting-mobile.png) · [真实 Claude 续跑](docs/validation/task-space-20261116/07-real-claude-resume.png)
+
+## 暖白阅读风与待办优化复验
+
+- 用同一个 Mock 文档任务的第二轮澄清做暖白、冷灰对照。采用暖白底和深绿主操作，待回复继续使用琥珀色标识。390×844 和 1440×900 首屏均能看到真实问题、输入框和回复按钮。已答问题在历史中显示全文，同一 Session 继续运行并完成任务。
+- 390px、1440px 和 1920px 对任务大厅、预约、运行中、等待人工和完成状态进行了实际浏览器操作。补充指令后，长结果末尾和代码块可以完整阅读，「查看最新结果」可以跳到最新 Run。真实 Claude Code `2.1.109` 在独立实例从页面续跑原 Session。
+- Vue 类型检查及生产构建通过。24 项自动测试通过，OpenAI 在线项默认跳过。
+
+[暖白任务详情](docs/validation/task-style-20261117/01-warm-waiting.png) · [冷灰对照](docs/validation/task-style-20261117/02-cool-waiting.png) · [暖白窄屏](docs/validation/task-style-20261117/03-warm-waiting-mobile.png) · [新版大厅](docs/validation/task-style-20261117/06-warm-lobby.png)
