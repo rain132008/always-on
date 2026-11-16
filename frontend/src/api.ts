@@ -1,9 +1,16 @@
-export interface TaskSummary {
+interface TaskIdentity {
   id: string
   title: string
   status: string
   updated_at: number
   workflow_id: string
+}
+
+export interface TaskSummary extends TaskIdentity {
+  workflow_enabled: number
+  latest_summary: string | null
+  pending_question: string | null
+  next_wakeup_at: number | null
 }
 
 export interface Run {
@@ -29,7 +36,7 @@ export interface HumanRequest {
   answered_at: number | null
 }
 
-export interface Task extends TaskSummary {
+export interface Task extends TaskIdentity {
   prompt: string
   workflow_enabled: boolean
   next_wakeup: { due_at: number } | null
@@ -86,6 +93,7 @@ export interface AgentProfile {
 
 type Artifact = {
   id: string
+  run_id: string
   created_at: number
 } & (
   | { kind: 'mr_review'; content: { head_sha: string; summary: string; findings: Array<{ path: string; detail: string }> } }
@@ -156,8 +164,14 @@ export function resumeRestriction(status: string, enabled: boolean, externalId: 
   return ''
 }
 
-export function date(timestamp: number) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).format(new Date(timestamp * 1000))
+const timestampFormat = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+})
+
+export function date(value: number) {
+  return timestampFormat.format(new Date(value * 1000))
+}
+
+export function timestamp(value: number) {
+  return new Date(value * 1000).toISOString()
 }

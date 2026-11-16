@@ -124,3 +124,18 @@ Vue 生产构建及 23 项自动测试通过，默认跳过 OpenAI 在线项。
 Vue 构建及 24 项自动测试通过，默认跳过 OpenAI 在线项。本机真实 CLI 启用文本处理，真实仓库工具和内网 Skill 仍待适配。
 
 [真实 Claude 待人工](docs/validation/local-claude-20261116/sdd-claude-waiting.png) · [重启后原会话完成](docs/validation/local-claude-20261116/sdd-claude-resumed.png)
+
+## 任务大厅与对话工作区复验
+
+| 场景 | 实际结果 |
+| --- | --- |
+| 发现任务 | **通过。** 6 条真实入库的隔离任务按真实状态展示。待人工和运行中排在前列，搜索、状态与工作流可组合过滤。从运行中的任务返回大厅时保留筛选。1440px、1920px 及 390px 检查通过。 |
+| 理解过程和介入 | **通过。** 查看运行中 MR，历史产物仍可阅读。文档任务完成两轮人工澄清，初始触发、人工回复和 Agent 输出可按时间阅读。失败原因、核验重排、原日志和 Session 标识可按需查看。 |
+| 继续和查看结果 | **通过。** 页面内补充指令使用原 Session。浏览器检查长输出末尾、代码块与产物定位。独立真实 Claude Code `2.1.109` 实例验证从任务详情恢复原 Session，第二轮输出复述了上轮标记。 |
+| 管理与等待 | **通过。** 预约时间来自实际 Wakeup，关闭任务取消预约。验证会话中心往返、工作流 YAML 与启停、Agent 列表和外部动作查看。 |
+
+走查后调整了三个易误读的反馈。运行中卡片标明「上一轮结果」，新待办下方清除上一条回复的排队提示，移动端标题区直接展示唤醒时间。当前界面可读取 Runner 保存的结果、产物及日志。实时 token 流和结构化工具调用仍依赖 Runner 采集能力。
+
+Vue 生产构建通过，24 项自动化测试通过，OpenAI 在线项默认跳过。
+
+[大厅 1440px](docs/validation/task-space-20261116/01-lobby-1440.png) · [大厅 1920px](docs/validation/task-space-20261116/06-lobby-1920.png) · [运行中](docs/validation/task-space-20261116/03-running-1440.png) · [待人工](docs/validation/task-space-20261116/02-waiting-1440.png) · [已完成](docs/validation/task-space-20261116/04-completed-1440.png) · [待人工窄屏](docs/validation/task-space-20261116/05-waiting-mobile.png) · [真实 Claude 续跑](docs/validation/task-space-20261116/07-real-claude-resume.png)

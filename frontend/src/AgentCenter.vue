@@ -111,7 +111,7 @@ onMounted(load)
       <header class="task-heading">
         <div>
           <h2>{{ creating ? '新建 Agent' : current?.name }}</h2>
-          <p v-if="current" class="task-id mono">{{ current.id }}</p>
+          <p v-if="current?.description" class="task-id">{{ current.description }}</p>
         </div>
         <time v-if="current">{{ date(current.updated_at) }}</time>
       </header>
@@ -126,6 +126,9 @@ onMounted(load)
             <button class="primary" :disabled="busy || !online || !canSave">{{ creating ? '创建 Agent' : '保存配置' }}</button>
           </form>
           <p v-if="notice" class="muted feedback" role="status">{{ notice }}</p>
+          <details v-if="current" class="disclosure compact-disclosure">
+            <summary>Agent 标识</summary><p class="mono disclosure-content">{{ current.id }}</p>
+          </details>
         </section>
         <section v-if="current" class="panel">
           <h3>绑定的工作流</h3>

@@ -131,16 +131,19 @@ onUnmounted(() => { ++revision; window.clearInterval(timer) })
         </div>
         <span class="chip" :data-status="current.task_status">{{ label(current.task_status) }}</span>
       </header>
-      <div class="detail-columns">
+      <div class="detail-columns session-layout">
+        <section class="panel management-panel">
+          <h3>继续原会话</h3>
+          <p v-if="resumeMessage" class="muted">{{ resumeMessage }}</p>
+          <form v-else class="management-form" @submit.prevent="save('resume')">
+            <label class="field">补充指令<textarea v-model="instruction" rows="3" maxlength="12000" required /></label>
+            <button class="primary" :disabled="!online || busy || !instruction.trim()">继续原会话</button>
+          </form>
+          <p v-if="notice" class="muted feedback" role="status">{{ notice }}</p>
+        </section>
         <section class="panel management-panel">
           <h3>会话信息</h3>
-          <dl class="facts inline-facts">
-            <dt>Session ID</dt><dd class="mono">{{ current.external_id || '待登记' }}</dd>
-          </dl>
-          <details class="disclosure compact-disclosure">
-            <summary>运行环境</summary>
-            <dl class="facts inline-facts"><dt>工作区</dt><dd class="mono">{{ current.workspace }}</dd></dl>
-          </details>
+          <p class="muted small">{{ current.external_id ? '会话已持久化' : '等待首次登记' }} · {{ current.runs.length }} 轮运行</p>
           <form v-if="editing" class="management-form" @submit.prevent="save('name')">
             <label class="field">会话名称<input v-model="name" required maxlength="300" /></label>
             <div class="button-row">
@@ -148,16 +151,14 @@ onUnmounted(() => { ++revision; window.clearInterval(timer) })
               <button type="button" @click="editing = false">取消</button>
             </div>
           </form>
-          <button v-else class="quiet-button spaced-button" @click="name = current.name; editing = true">修改名称</button>
-        </section>
-        <section class="panel management-panel">
-          <h3>手动继续会话</h3>
-          <p v-if="resumeMessage" class="muted">{{ resumeMessage }}</p>
-          <form v-else class="management-form" @submit.prevent="save('resume')">
-            <label class="field">补充指令<textarea v-model="instruction" rows="3" maxlength="12000" required /></label>
-            <button class="primary" :disabled="!online || busy || !instruction.trim()">继续原会话</button>
-          </form>
-          <p v-if="notice" class="muted feedback" role="status">{{ notice }}</p>
+          <button v-else class="quiet-button" @click="name = current.name; editing = true">修改名称</button>
+          <details class="disclosure compact-disclosure">
+            <summary>会话标识与工作区</summary>
+            <dl class="facts inline-facts">
+              <dt>Session ID</dt><dd class="mono">{{ current.external_id || '待登记' }}</dd>
+              <dt>工作区</dt><dd class="mono">{{ current.workspace }}</dd>
+            </dl>
+          </details>
         </section>
       </div>
       <section class="panel">

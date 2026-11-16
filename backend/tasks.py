@@ -452,7 +452,30 @@ class Tasks:
     def list(self):
         with self.db.engine.connect() as connection:
             return rows(connection, """
-                SELECT id, title, status, updated_at, workflow_id FROM tasks ORDER BY created_at DESC
+                WITH latest_output AS (
+                    SELECT task_id, MAX(generation) AS generation
+                    FROM runs WHERE summary IS NOT NULL GROUP BY task_id
+                ), pending_request AS (
+                    SELECT task_id, question,
+                           ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY created_at, id) AS position
+                    FROM human_requests WHERE answer IS NULL
+                ), planned_wakeup AS (
+                    SELECT w.task_id, MIN(w.due_at) AS due_at
+                    FROM wakeups w JOIN events e ON e.id = w.event_id
+                    WHERE w.status = 'pending' AND e.kind = 'agent_wakeup' GROUP BY w.task_id
+                )
+                SELECT t.id, t.title, t.status, t.updated_at, t.workflow_id,
+                       COALESCE(c.enabled, 1) AS workflow_enabled,
+                       substr(r.summary, 1, 420) AS latest_summary,
+                       substr(h.question, 1, 420) AS pending_question,
+                       w.due_at AS next_wakeup_at
+                FROM tasks t
+                LEFT JOIN workflow_controls c ON c.workflow_id = t.workflow_id
+                LEFT JOIN latest_output lo ON lo.task_id = t.id
+                LEFT JOIN runs r ON r.task_id = lo.task_id AND r.generation = lo.generation
+                LEFT JOIN pending_request h ON h.task_id = t.id AND h.position = 1 AND t.status = 'waiting_human'
+                LEFT JOIN planned_wakeup w ON w.task_id = t.id
+                ORDER BY t.created_at DESC
             """)
 
     def detail(self, task_id):

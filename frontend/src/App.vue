@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { api, date, label, workflowLabels, type Action, type Task, type TaskSummary } from './api'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { api, label, type Action, type Task, type TaskSummary } from './api'
 import AgentCenter from './AgentCenter.vue'
 import SessionCenter from './SessionCenter.vue'
 import TaskDetail from './TaskDetail.vue'
+import TaskLobby from './TaskLobby.vue'
 import WorkflowCenter from './WorkflowCenter.vue'
 
 const query = new URLSearchParams(location.search)
-const views = { tasks: '任务工作台', sessions: '会话中心', workflows: '工作流管理', agents: 'Agent 管理', actions: '外部动作' } as const
+const views = { tasks: '任务大厅', sessions: '会话中心', workflows: '工作流管理', agents: 'Agent 管理', actions: '外部动作' } as const
 type View = keyof typeof views
-const initialView = query.get('view')
-const view = ref<View>(initialView === 'sessions' || initialView === 'workflows' || initialView === 'agents' || initialView === 'actions' ? initialView : 'tasks')
+function readView(query: URLSearchParams): View {
+  const name = query.get('view')
+  if (name === 'sessions' || name === 'workflows' || name === 'agents' || name === 'actions') return name
+  return 'tasks'
+}
+const view = ref<View>(readView(query))
 const selected = ref(query.get('task'))
 const selectedSession = ref(query.get('session'))
 const selectedWorkflow = ref(query.get('workflow'))
@@ -18,9 +23,6 @@ const selectedAgent = ref(query.get('agent'))
 const tasks = ref<TaskSummary[]>([])
 const task = ref<Task | null>(null)
 const actions = ref<Action[]>([])
-const search = ref('')
-const taskStatus = ref('all')
-const taskType = ref('all')
 const actionStatus = ref('all')
 const actionSearch = ref('')
 const title = ref('')
@@ -32,6 +34,8 @@ const mode = ref('mock')
 const runtimeLabels: Record<string, string> = { mock: '模拟模式', mixed: 'SDD 使用 Claude', 'claude-smoke': 'Claude 测试' }
 const error = ref('')
 const loadError = ref(false)
+const taskError = ref('')
+const feedback = ref('')
 const createDialog = ref<HTMLDialogElement | null>(null)
 const actionDialog = ref<HTMLDialogElement | null>(null)
 const closeDialog = ref<HTMLDialogElement | null>(null)
@@ -44,23 +48,7 @@ const remoteId = ref('')
 let refreshVersion = 0
 let timer: number | undefined
 
-const priority: Record<string, number> = { running: 0, waiting_human: 1, recovery_required: 2, failed: 2, ready: 3, waiting_timer: 4, completed: 5, closed: 6 }
-const overview = [
-  { key: 'all', text: '全部任务', tone: 'all' },
-  { key: 'running', text: '运行中', tone: 'running' },
-  { key: 'waiting_human', text: '待人工', tone: 'waiting_human' },
-  { key: 'issues', text: '异常', tone: 'failed' },
-  { key: 'completed', text: '已完成', tone: 'completed' },
-]
-const statusOptions = ['running', 'waiting_human', 'recovery_required', 'failed', 'ready', 'waiting_timer', 'completed', 'closed']
-const taskTypes = computed(() => [...new Set(tasks.value.map(item => item.workflow_id))].sort())
 const actionStates = computed(() => [...new Set(actions.value.map(item => item.status))].sort())
-
-function matchesStatus(item: TaskSummary, status: string) {
-  if (status === 'all') return true
-  if (status === 'issues') return item.status === 'failed' || item.status === 'recovery_required'
-  return item.status === status
-}
 
 function actionTitle(kind: string) {
   if (kind === 'human_request') return '人工待办通知'
@@ -68,16 +56,6 @@ function actionTitle(kind: string) {
   return kind
 }
 
-const metrics = computed(() => overview.map(item => ({
-  ...item, count: tasks.value.filter(task => matchesStatus(task, item.key)).length,
-})))
-const filtered = computed(() => {
-  const needle = search.value.trim().toLocaleLowerCase()
-  return tasks.value.filter(item =>
-    (item.title.toLocaleLowerCase().includes(needle) || item.id.includes(needle)) &&
-    matchesStatus(item, taskStatus.value) && (taskType.value === 'all' || item.workflow_id === taskType.value),
-  ).sort((a, b) => (priority[a.status] ?? 7) - (priority[b.status] ?? 7) || b.updated_at - a.updated_at)
-})
 const visibleActions = computed(() => {
   const needle = actionSearch.value.trim().toLocaleLowerCase()
   return actions.value.filter(action =>
@@ -86,17 +64,11 @@ const visibleActions = computed(() => {
       .some(text => text?.toLocaleLowerCase().includes(needle)),
   )
 })
-watch([search, taskStatus, taskType], () => {
-  if (!busy.value && !filtered.value.some(item => item.id === selected.value)) {
-    select(filtered.value[0]?.id ?? null)
-  }
-})
-
-function storeLocation() {
+function storeLocation(push = false) {
   const next = new URL(location.href)
   if (view.value !== 'tasks') next.searchParams.set('view', view.value)
   else next.searchParams.delete('view')
-  if (selected.value) next.searchParams.set('task', selected.value)
+  if (view.value === 'tasks' && selected.value) next.searchParams.set('task', selected.value)
   else next.searchParams.delete('task')
   if (selectedSession.value) next.searchParams.set('session', selectedSession.value)
   else next.searchParams.delete('session')
@@ -104,51 +76,63 @@ function storeLocation() {
   else next.searchParams.delete('workflow')
   if (selectedAgent.value) next.searchParams.set('agent', selectedAgent.value)
   else next.searchParams.delete('agent')
-  history.replaceState(null, '', next)
+  if (next.href === location.href) return
+  if (push) history.pushState(null, '', next)
+  else history.replaceState(null, '', next)
 }
 
-function select(id: string | null) {
+function setTask(id: string | null) {
   if (selected.value !== id) {
     selected.value = id
     task.value = null
+    taskError.value = ''
+    feedback.value = ''
     error.value = ''
   }
-  storeLocation()
-  void refresh()
 }
 
-function switchView(next: View) {
+function navigate(next: View) {
   view.value = next
   error.value = ''
-  storeLocation()
+  storeLocation(true)
+  window.scrollTo(0, 0)
   void refresh()
 }
 
 function openTask(id: string) {
-  if (!filtered.value.some(item => item.id === id)) resetFilters()
-  switchView('tasks')
-  select(id)
+  setTask(id)
+  navigate('tasks')
+}
+
+function openLobby() {
+  setTask(null)
+  navigate('tasks')
 }
 
 function openSession(id: string) {
   selectedSession.value = id
-  switchView('sessions')
+  navigate('sessions')
 }
 
 function openWorkflow(id: string) {
   selectedWorkflow.value = id
-  switchView('workflows')
+  navigate('workflows')
 }
 
 function openAgent(id: string) {
   selectedAgent.value = id
-  switchView('agents')
+  navigate('agents')
 }
 
-function resetFilters() {
-  search.value = ''
-  taskStatus.value = 'all'
-  taskType.value = 'all'
+function restoreLocation() {
+  const current = new URLSearchParams(location.search)
+  view.value = readView(current)
+  setTask(current.get('task'))
+  selectedSession.value = current.get('session')
+  selectedWorkflow.value = current.get('workflow')
+  selectedAgent.value = current.get('agent')
+  error.value = ''
+  void refresh()
 }
 
 async function refresh() {
@@ -163,12 +147,24 @@ async function refresh() {
     online.value = health.worker_alive
     mode.value = health.mode
     loadError.value = false
-    if (!list.some(item => item.id === selected.value)) {
-      selected.value = filtered.value[0]?.id ?? null
-      storeLocation()
+    const id = view.value === 'tasks' ? selected.value : null
+    if (id) {
+      if (!list.some(item => item.id === id)) {
+        task.value = null
+        taskError.value = '未找到这项任务。'
+      } else {
+        const detail = await api<Task>('/tasks/' + id).catch((failure: Error) => {
+          if (version === refreshVersion) taskError.value = failure.message
+          return null
+        })
+        if (version === refreshVersion && detail) {
+          const opening = task.value === null
+          task.value = detail
+          taskError.value = ''
+          if (opening) void nextTick(() => document.getElementById('task-heading')?.focus({ preventScroll: true }))
+        }
+      }
     }
-    const detail = selected.value ? await api<Task>('/tasks/' + selected.value) : null
-    if (version === refreshVersion) task.value = detail
   } catch {
     if (version === refreshVersion) {
       online.value = false
@@ -183,6 +179,7 @@ async function perform(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true
   error.value = ''
+  feedback.value = ''
   try {
     await action()
     await refresh()
@@ -198,16 +195,22 @@ function createTask() {
     const item = await api<{ id: string }>('/tasks', { title: title.value, prompt: prompt.value })
     title.value = ''
     prompt.value = ''
-    resetFilters()
     createDialog.value?.close()
-    switchView('tasks')
-    select(item.id)
+    openTask(item.id)
   })
 }
 
 function sendReply(request: string, answer: string) {
   void perform(async () => {
     await api('/requests/' + request + '/reply', { answer })
+    feedback.value = '回复已提交，原会话将继续。'
+  })
+}
+
+function resumeTask(session: string, instruction: string) {
+  void perform(async () => {
+    await api('/sessions/' + session + '/resume', { instruction })
+    feedback.value = '补充指令已排队，将在原会话执行。'
   })
 }
 
@@ -255,10 +258,15 @@ function reconcile() {
 }
 
 onMounted(() => {
+  window.addEventListener('popstate', restoreLocation)
   void refresh()
   timer = window.setInterval(() => { if (!busy.value) void refresh() }, 1500)
 })
-onUnmounted(() => window.clearInterval(timer))
+onUnmounted(() => {
+  ++refreshVersion
+  window.clearInterval(timer)
+  window.removeEventListener('popstate', restoreLocation)
+})
 </script>
 
 <template>
@@ -266,71 +274,34 @@ onUnmounted(() => window.clearInterval(timer))
     <div class="topbar-inner">
       <div class="brand"><span class="brand-mark" aria-hidden="true"></span><strong>Always-on</strong></div>
       <nav aria-label="管理台">
-        <button :aria-current="view === 'tasks' ? 'page' : undefined" @click="switchView('tasks')">任务工作台</button>
-        <button :aria-current="view === 'sessions' ? 'page' : undefined" @click="switchView('sessions')">会话中心</button>
-        <button :aria-current="view === 'workflows' ? 'page' : undefined" @click="switchView('workflows')">工作流管理</button>
-        <button :aria-current="view === 'agents' ? 'page' : undefined" @click="switchView('agents')">Agent 管理</button>
-        <button :aria-current="view === 'actions' ? 'page' : undefined" @click="switchView('actions')">外部动作<span v-if="actions.some(item => item.status === 'needs_reconcile')" class="nav-alert"></span></button>
+        <button :aria-current="view === 'tasks' ? 'page' : undefined" @click="openLobby">任务大厅</button>
+        <button :aria-current="view === 'sessions' ? 'page' : undefined" @click="navigate('sessions')">会话中心</button>
+        <button :aria-current="view === 'workflows' ? 'page' : undefined" @click="navigate('workflows')">工作流管理</button>
+        <button :aria-current="view === 'agents' ? 'page' : undefined" @click="navigate('agents')">Agent 管理</button>
+        <button :aria-current="view === 'actions' ? 'page' : undefined" @click="navigate('actions')">外部动作<span v-if="actions.some(item => item.status === 'needs_reconcile')" class="nav-alert"></span></button>
       </nav>
       <span class="connection"><i :class="{ online }"></i>{{ online ? `${runtimeLabels[mode] ?? mode} · 服务在线` : loaded ? '服务未连接' : '正在连接服务' }}</span>
     </div>
   </header>
 
   <main class="frame">
-    <div class="page-heading">
+    <div v-if="view !== 'tasks' || !selected" class="page-heading">
       <h1>{{ views[view] }}</h1>
       <button v-if="view === 'tasks'" class="primary" :disabled="!online" @click="error = ''; createDialog?.showModal()">新建 SDD 任务</button>
     </div>
     <p v-if="loadError" class="error" role="status">暂时无法刷新管理台。连接恢复后会自动重试。</p>
-    <p v-if="error && !createDialog?.open && !actionDialog?.open && !closeDialog?.open" class="error" role="alert">{{ error }}</p>
+    <p v-if="error && !(view === 'tasks' && task) && !createDialog?.open && !actionDialog?.open && !closeDialog?.open" class="error" role="alert">{{ error }}</p>
 
-    <template v-if="view === 'tasks'">
-      <section v-if="loaded && !loadError || tasks.length" class="overview" aria-label="任务状态概览">
-        <button v-for="item in metrics" :key="item.key" class="metric" :aria-pressed="taskStatus === item.key" @click="taskStatus = item.key">
-          <span class="metric-label"><i class="status-dot" :data-status="item.tone"></i>{{ item.text }}</span>
-          <strong>{{ item.count }}</strong>
-        </button>
+    <TaskLobby v-show="view === 'tasks' && !selected" :tasks="tasks" :loaded="loaded && (!loadError || !!tasks.length)" @task="openTask" />
+
+    <template v-if="view === 'tasks' && selected">
+      <TaskDetail v-if="task" :key="task.id" :task="task" :busy="busy" :online="online" :feedback="feedback"
+        :operation-error="closeDialog?.open ? '' : error"
+        @back="openLobby" @close="confirmClose" @reply="sendReply" @resume="resumeTask" @recover="recover" @session="openSession" @workflow="openWorkflow" />
+      <section v-else class="empty-board" aria-live="polite">
+        <h1>{{ taskError || '正在读取任务' }}</h1>
+        <button @click="openLobby">返回任务大厅</button>
       </section>
-      <div class="desk task-desk">
-        <aside class="queue" aria-label="任务队列">
-          <div class="list-tools">
-            <div class="section-heading"><h3>任务列表</h3><span v-if="loaded" class="list-count">{{ filtered.length }} 项</span></div>
-            <label class="field search">查找任务<input v-model="search" type="search" placeholder="任务名称或 ID" /></label>
-            <div class="filter-grid">
-              <label class="field">状态
-                <select v-model="taskStatus" aria-label="状态">
-                  <option value="all">全部状态</option><option value="issues">异常</option>
-                  <option v-for="status in statusOptions" :key="status" :value="status">{{ label(status) }}</option>
-                </select>
-              </label>
-              <label class="field">类型
-                <select v-model="taskType" aria-label="类型">
-                  <option value="all">全部类型</option>
-                  <option v-for="id in taskTypes" :key="id" :value="id">{{ workflowLabels[id] ?? id }}</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <p v-if="!filtered.length" class="queue-empty">{{ !loaded ? '正在读取任务…' : tasks.length ? '没有符合筛选条件的任务。' : '暂无任务。' }}</p>
-          <div v-else class="queue-scroll">
-            <button v-for="item in filtered" :key="item.id" class="queue-item" :aria-current="selected === item.id ? 'true' : undefined" @click="select(item.id)">
-              <span class="queue-title"><i class="status-dot" :data-status="item.status"></i><strong>{{ item.title }}</strong></span>
-              <span class="queue-meta">
-                <span class="queue-kind">{{ workflowLabels[item.workflow_id] ?? item.workflow_id }}</span>
-                <time :datetime="new Date(item.updated_at * 1000).toISOString()">{{ date(item.updated_at) }}</time>
-                <span class="chip" :data-status="item.status">{{ label(item.status) }}</span>
-              </span>
-            </button>
-          </div>
-        </aside>
-        <TaskDetail v-if="task" :key="task.id" :task="task" :busy="busy" :online="online"
-          @close="confirmClose" @reply="sendReply" @recover="recover" @session="openSession" @workflow="openWorkflow" />
-        <section v-else class="empty-board">
-          <h2>{{ selected || !loaded ? '正在读取任务' : tasks.length ? '没有匹配的任务' : '从一个 SDD 任务开始' }}</h2>
-          <p v-if="!selected && loaded && !tasks.length">新建任务后，可以在这里查看进展和回复人工待办。</p>
-          <button v-if="!selected && tasks.length" @click="resetFilters">清除筛选</button>
-        </section>
-      </div>
     </template>
 
     <SessionCenter v-else-if="view === 'sessions'" :initial-id="selectedSession" :online="online"
@@ -342,7 +313,7 @@ onUnmounted(() => window.clearInterval(timer))
     <AgentCenter v-else-if="view === 'agents'" :initial-id="selectedAgent" :online="online"
       @select="id => { selectedAgent = id; storeLocation() }" @workflow="openWorkflow" />
 
-    <section v-else class="panel flat-panel" aria-label="外部动作记录">
+    <section v-else-if="view === 'actions'" class="panel flat-panel" aria-label="外部动作记录">
       <div class="list-tools action-tools">
         <label class="field search">搜索动作<input v-model="actionSearch" type="search" placeholder="动作、来源或记录 ID" /></label>
         <label class="field">状态
